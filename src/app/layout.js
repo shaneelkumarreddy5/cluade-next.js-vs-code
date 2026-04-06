@@ -1,10 +1,24 @@
 import './globals.css';
 import GlonniApp from '@/components/GlonniApp';
+import { Outfit, Space_Mono } from 'next/font/google';
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-outfit',
+  display: 'swap',
+});
+
+const spaceMono = Space_Mono({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-space-mono',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'Glonni — Cashback-First Marketplace',
   description: "Shop smart with Glonni — India's cashback-first marketplace. Save on every purchase.",
-  themeColor: '#010101',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -17,17 +31,14 @@ export const metadata = {
   },
 };
 
+export const viewport = {
+  themeColor: '#ffffff',
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body>
+      <body className={`${outfit.className} ${outfit.variable} ${spaceMono.variable}`}>
         {/* PWA Offline Bar */}
         <div className="offline-bar" id="offline-bar">
           📡 You&apos;re offline — some features may not work
