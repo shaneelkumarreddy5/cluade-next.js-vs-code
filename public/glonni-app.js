@@ -1,23 +1,11 @@
 // ═══════════════════════════════════════════════════
 // SUPABASE REST CLIENT
 // ═══════════════════════════════════════════════════
-const API="https://kbvfgxnepoheapkojiwk.supabase.co";
-const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtidmZneG5lcG9oZWFwa29qaXdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzODQyOTIsImV4cCI6MjA4Njk2MDI5Mn0.gD4STSSJsAW56aEgIQJ2G55orl99V5M7Oe4qqbtztUk";
 let TK=null;
-const hd=(x={})=>({apikey:KEY,"Content-Type":"application/json",...(TK?{Authorization:`Bearer ${TK}`}:{}),...x});
-
-const sb={
-  auth:{
-    signUp:async(e,p,m={})=>{const r=await fetch(`${API}/auth/v1/signup`,{method:"POST",headers:hd(),body:JSON.stringify({email:e,password:p,data:m})});return r.json()},
-    signIn:async(e,p)=>{const r=await fetch(`${API}/auth/v1/token?grant_type=password`,{method:"POST",headers:hd(),body:JSON.stringify({email:e,password:p})});return r.json()},
-  },
-  get:async(t,s="*",f={})=>{let u=`${API}/rest/v1/${t}?select=${encodeURIComponent(s)}`;Object.entries(f).forEach(([k,v])=>u+=`&${k}=${encodeURIComponent(v)}`);const r=await fetch(u,{headers:hd()});const d=await r.json();return Array.isArray(d)?d:[]},
-  ins:async(t,d)=>{const r=await fetch(`${API}/rest/v1/${t}`,{method:"POST",headers:hd({Prefer:"return=representation"}),body:JSON.stringify(d)});if(!r.ok){const e=await r.json();console.error('INS error:',t,e);return[];}const v=await r.json();return Array.isArray(v)?v:[]},
-  ups:async(t,d)=>{const r=await fetch(`${API}/rest/v1/${t}`,{method:"POST",headers:hd({Prefer:"return=representation,resolution=merge-duplicates"}),body:JSON.stringify(d)});if(!r.ok){const e=await r.json();console.error('UPS error:',t,e);}return r.ok?(await r.json()):null},
-  upd:async(t,d,f={})=>{let u=`${API}/rest/v1/${t}?`;Object.entries(f).forEach(([k,v])=>u+=`${k}=${encodeURIComponent(v)}&`);return(await fetch(u,{method:"PATCH",headers:hd({Prefer:"return=representation"}),body:JSON.stringify(d)})).json()},
-  del:async(t,f={})=>{let u=`${API}/rest/v1/${t}?`;Object.entries(f).forEach(([k,v])=>u+=`${k}=${encodeURIComponent(v)}&`);return(await fetch(u,{method:"DELETE",headers:hd()})).ok},
-  rpc:async(fn,p={})=>{const r=await fetch(`${API}/rest/v1/rpc/${fn}`,{method:"POST",headers:hd(),body:JSON.stringify(p)});return r.json()},
-};
+const sb=window.__glonniSupabaseBridge;
+if(!sb){
+  console.error('Supabase bridge missing. Ensure GlonniApp initializes before glonni-app.js loads.');
+}
 
 // ═══════════════════════════════════════════════════
 // STATE & UTILS
@@ -189,6 +177,7 @@ function toggleUserMenu(){
       {icon:'📋',label:'Orders',action:"renderAdminDash('orders','all')"},
       {icon:'💰',label:'Finance',action:"renderAdminDash('finance','transactions')"},
       {icon:'📢',label:'Marketing',action:"renderAdminDash('marketing','ads')"},
+      {icon:'🛟',label:'Support',action:"renderAdminDash('support','users')"},
       {icon:'⚙️',label:'Settings',action:"renderAdminDash('settings','categories')"},
       {icon:'👤',label:'Profile',action:"go('profile')"},
     ];
@@ -394,20 +383,16 @@ function stopVoice(){
 // ═══════════════════════════════════════════════════
 // IMAGE UPLOAD (Supabase Storage)
 // ═══════════════════════════════════════════════════
-const STORAGE_URL=`${API}/storage/v1/object/public/glonni`;
-
 async function uploadFile(file, folder){
-  if(!TK)return null;
+  if(!PROFILE?.id)return null;
   const ext=file.name.split('.').pop().toLowerCase();
   const allowed=['jpg','jpeg','png','webp','gif'];
   if(!allowed.includes(ext)){toast('Only JPG, PNG, WebP, GIF allowed','⚠️');return null;}
   if(file.size>5*1024*1024){toast('Max 5MB per image','⚠️');return null;}
   const path=`${PROFILE.id}/${folder}/${Date.now()}.${ext}`;
-  const res=await fetch(`${API}/storage/v1/object/glonni/${path}`,{
-    method:'POST',headers:{'Authorization':`Bearer ${TK}`,'Content-Type':file.type,'x-upsert':'true'},body:file
-  });
-  if(!res.ok){toast('Upload failed','❌');return null;}
-  return `${STORAGE_URL}/${path}`;
+  const result=await sb.uploadPublicFile('glonni',path,file);
+  if(result?.error){toast('Upload failed','❌');return null;}
+  return result?.url||null;
 }
 
 async function uploadMultiple(files, folder, onProgress){
@@ -695,6 +680,7 @@ function go(view,params={},pushHistory=true){
   const routes={
     home:renderHome, shop:renderShop, product:renderProduct, cart:renderCartPage,
     checkout:renderCheckout, orders:renderOrders, 'order-detail':renderOrderDetail, wallet:renderWallet, wishlist:renderWishlist, profile:renderProfile,
+    'support-users':()=>renderSupportPage('users'), 'support-vendors':()=>renderSupportPage('vendors'),
     'vendor-dash':renderVendorDash, 'vendor-products':renderVendorProducts, 'vendor-store':renderVendorStore, 'vendor-coupons':renderVendorCoupons, 'vendor-sponsored':renderVendorSponsored, 'vendor-warehouses':renderVendorWarehouses, 'vendor-confirm-catalog':renderVendorConfirmCatalog,
     'aff-dash':renderAffDash, 'aff-links':renderAffLinks,
     'admin-dash':renderAdminDash,'admin-panel':renderAdminDash, 'admin-users':renderAdminUsers, 'admin-vendors':renderAdminVendors,
@@ -5314,6 +5300,7 @@ const ADMIN_NAV=[
   {id:'orders',    icon:'📋', label:'Orders'},
   {id:'finance',   icon:'💰', label:'Finance'},
   {id:'marketing', icon:'📢', label:'Marketing'},
+  {id:'support',   icon:'🛟', label:'Support'},
   {id:'settings',  icon:'⚙️', label:'Settings'},
 ];
 
@@ -5445,6 +5432,7 @@ async function apRenderSection(section, tab, attn){
   else if(section==='orders')    await apOrders(el,tab||'all');
   else if(section==='finance')   await apFinance(el,tab||'transactions');
   else if(section==='marketing') await apMarketing(el,tab||'ads');
+  else if(section==='support')   await apSupport(el,tab||'users');
   else if(section==='settings')  await apSettings(el,tab||'rules');
 }
 
@@ -5467,6 +5455,7 @@ async function apTab(section,tab){
   else if(section==='orders')    await apOrders(el,tab);
   else if(section==='finance')   await apFinance(el,tab);
   else if(section==='marketing') await apMarketing(el,tab);
+  else if(section==='support')   await apSupport(el,tab);
   else if(section==='settings')  await apSettings(el,tab);
   else if(section==='catalog')   await apCatalog(el,tab);
 }
@@ -6153,9 +6142,7 @@ async function ctbCreateAt(level){
   const slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-$/,'')+'-'+Date.now().toString(36);
   const data={name,slug,parent_id:parentId||null,level,icon:'📦',sort_order:1,is_active:true};
   try{
-    const resp=await fetch(API+'/rest/v1/categories',{method:'POST',headers:hd({Prefer:'return=representation'}),body:JSON.stringify(data)});
-    if(!resp.ok){const err=await resp.json();console.error('Create category error:',err);toast('Error: '+(err.message||err.details||err.hint||JSON.stringify(err)),'❌');return;}
-    const result=await resp.json();
+    const result=await sb.ins('categories',data);
     if(result&&result.length){toast('"'+name+'" created!','✅');apRefreshCatPage();}
     else{toast('Insert returned empty','❌');}
   }catch(e){console.error('Create exception:',e);toast('Network error: '+e.message,'❌');}
@@ -6273,6 +6260,182 @@ if(r){toast(`"${cat.name}" deleted!`,'✅');apRefreshCatPage();}else{toast('Erro
 }
 
 // ──────────────────────────────────────────
+// SETTINGS
+// ──────────────────────────────────────────
+function emptySupportConfig(){
+  return {email:'',phone:'',chatbot:'',helpCenter:'',hours:'',notes:''};
+}
+
+function supportPageKey(section){
+  return section==='vendors'?'support-vendors':'support-users';
+}
+
+async function fetchSupportConfig(section){
+  const rows=await sb.get("page_layouts","*",{page:`eq.${supportPageKey(section)}`,section_type:"eq.support_content",order:"updated_at.desc",limit:1}).catch(()=>[]);
+  return rows[0]||null;
+}
+
+async function saveSupportConfig(section){
+  const prefix=section==='vendors'?'support-vendors':'support-users';
+  const content={
+    email:$(prefix+'-email')?.value?.trim()||'',
+    phone:$(prefix+'-phone')?.value?.trim()||'',
+    chatbot:$(prefix+'-chatbot')?.value?.trim()||'',
+    helpCenter:$(prefix+'-help')?.value?.trim()||'',
+    hours:$(prefix+'-hours')?.value?.trim()||'',
+    notes:$(prefix+'-notes')?.value?.trim()||'',
+  };
+  const page=supportPageKey(section);
+  const existing=await fetchSupportConfig(section);
+  const payload={
+    page,
+    section_type:'support_content',
+    title:section==='vendors'?'Vendor Support':'User Support',
+    content,
+    device:'all',
+    sort_order:0,
+    is_active:true,
+    is_draft:false,
+    updated_at:new Date().toISOString(),
+  };
+  if(existing?.id){
+    await sb.upd('page_layouts',payload,{id:`eq.${existing.id}`});
+  }else{
+    payload.created_by=PROFILE.id;
+    await sb.ins('page_layouts',payload);
+  }
+  toast('Support details saved to Supabase','✅');
+}
+
+async function resetSupportConfig(section){
+  const existing=await fetchSupportConfig(section);
+  if(existing?.id){
+    await sb.upd('page_layouts',{content:emptySupportConfig(),updated_at:new Date().toISOString()},{id:`eq.${existing.id}`});
+  }
+  apTab('support',section);
+  toast('Support details cleared','🧹');
+}
+
+async function apSupport(el,tab){
+  const tabs=[{id:'users',label:'For Users'},{id:'vendors',label:'For Vendors'}];
+  const [usersRow,vendorsRow]=await Promise.all([fetchSupportConfig('users'),fetchSupportConfig('vendors')]);
+  const config={users:usersRow?.content||emptySupportConfig(),vendors:vendorsRow?.content||emptySupportConfig()};
+
+  if(tab==='users'){
+    const data=config.users||{};
+    el.innerHTML=`
+    <div class="ap-header">
+      <div>
+        <div class="ap-title">🛟 Support For Users</div>
+        <div class="ap-sub">Add help email, chatbot links, FAQs, or escalation contacts for shoppers later.</div>
+      </div>
+    </div>
+    ${apTabBar('support',tabs,'users')}
+    <div class="ap-card">
+      <div class="ap-card-title">User Support Settings</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-group"><label class="form-label">Support Email</label><input class="form-input" id="support-users-email" placeholder="support@glonni.com" value="${esc(data.email||'')}"></div>
+        <div class="form-group"><label class="form-label">Support Phone</label><input class="form-input" id="support-users-phone" placeholder="+91 ..." value="${esc(data.phone||'')}"></div>
+        <div class="form-group"><label class="form-label">Chatbot / Live Chat Link</label><input class="form-input" id="support-users-chatbot" placeholder="https://..." value="${esc(data.chatbot||'')}"></div>
+        <div class="form-group"><label class="form-label">Help Center URL</label><input class="form-input" id="support-users-help" placeholder="https://..." value="${esc(data.helpCenter||'')}"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px">
+        <div class="form-group"><label class="form-label">Support Hours</label><input class="form-input" id="support-users-hours" placeholder="Mon-Sat, 9 AM to 7 PM" value="${esc(data.hours||'')}"></div>
+        <div class="form-group"><label class="form-label">Internal Notes</label><textarea class="form-textarea" id="support-users-notes" placeholder="Add instructions for future support setup..." style="min-height:100px">${esc(data.notes||'')}</textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-outline btn-pill btn-sm" onclick="resetSupportConfig('users')">Clear</button>
+        <button class="btn btn-gold btn-pill btn-sm" onclick="saveSupportConfig('users')">Save User Support</button>
+      </div>
+      <div style="margin-top:16px;padding:14px;border-radius:10px;background:var(--gray-50);border:1px dashed var(--gray-200)">
+        <p style="font-size:12px;color:var(--gray-500);margin:0">These details are stored in Supabase and shared across admins. The public support page reads the same values.</p>
+      </div>
+    </div>`;
+  } else if(tab==='vendors'){
+    const data=config.vendors||{};
+    el.innerHTML=`
+    <div class="ap-header">
+      <div>
+        <div class="ap-title">🏪 Support For Vendors</div>
+        <div class="ap-sub">Add onboarding help, account management contacts, and seller support channels later.</div>
+      </div>
+    </div>
+    ${apTabBar('support',tabs,'vendors')}
+    <div class="ap-card">
+      <div class="ap-card-title">Vendor Support Settings</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-group"><label class="form-label">Vendor Support Email</label><input class="form-input" id="support-vendors-email" placeholder="partners@glonni.com" value="${esc(data.email||'')}"></div>
+        <div class="form-group"><label class="form-label">Vendor Support Phone</label><input class="form-input" id="support-vendors-phone" placeholder="+91 ..." value="${esc(data.phone||'')}"></div>
+        <div class="form-group"><label class="form-label">Onboarding / Chat Link</label><input class="form-input" id="support-vendors-chatbot" placeholder="https://..." value="${esc(data.chatbot||'')}"></div>
+        <div class="form-group"><label class="form-label">Seller Help Center URL</label><input class="form-input" id="support-vendors-help" placeholder="https://..." value="${esc(data.helpCenter||'')}"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px">
+        <div class="form-group"><label class="form-label">Support Hours</label><input class="form-input" id="support-vendors-hours" placeholder="Mon-Fri, 10 AM to 6 PM" value="${esc(data.hours||'')}"></div>
+        <div class="form-group"><label class="form-label">Internal Notes</label><textarea class="form-textarea" id="support-vendors-notes" placeholder="Add vendor support process notes..." style="min-height:100px">${esc(data.notes||'')}</textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-outline btn-pill btn-sm" onclick="resetSupportConfig('vendors')">Clear</button>
+        <button class="btn btn-gold btn-pill btn-sm" onclick="saveSupportConfig('vendors')">Save Vendor Support</button>
+      </div>
+      <div style="margin-top:16px;padding:14px;border-radius:10px;background:var(--gray-50);border:1px dashed var(--gray-200)">
+        <p style="font-size:12px;color:var(--gray-500);margin:0">These details are stored in Supabase and shared across admins. The public vendor support page reads the same values.</p>
+      </div>
+    </div>`;
+  }
+}
+
+async function renderSupportPage(tab='users'){
+  const [usersRow,vendorsRow]=await Promise.all([fetchSupportConfig('users'),fetchSupportConfig('vendors')]);
+  const users=usersRow?.content||emptySupportConfig();
+  const vendors=vendorsRow?.content||emptySupportConfig();
+  const data=tab==='vendors'?vendors:users;
+  const title=tab==='vendors'?'Vendor Support':'User Support';
+  const subtitle=tab==='vendors'
+    ?'Get help with onboarding, payouts, catalog issues, and seller operations.'
+    :'Get help with orders, returns, payments, and account issues.';
+  const empty=!data.email&&!data.phone&&!data.chatbot&&!data.helpCenter&&!data.hours&&!data.notes;
+
+  $('main').innerHTML=`<div class="container" style="padding:32px 0 64px">
+    <div class="ap-card" style="max-width:920px;margin:0 auto">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px">
+        <div>
+          <h1 style="font-size:28px;font-weight:900;margin-bottom:6px">🛟 ${title}</h1>
+          <p style="font-size:14px;color:var(--gray-500)">${subtitle}</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ${tab==='users'?'btn-gold':'btn-outline'} btn-pill btn-sm" onclick="go('support-users')">For Users</button>
+          <button class="btn ${tab==='vendors'?'btn-gold':'btn-outline'} btn-pill btn-sm" onclick="go('support-vendors')">For Vendors</button>
+        </div>
+      </div>
+      ${empty?`<div class="ap-empty"><span>🛟</span><p style="font-weight:600">Support details will be available soon</p><p style="font-size:13px;color:var(--gray-500)">The admin team has not published support contact details for this section yet.</p></div>`:`
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+        <div style="padding:16px;border:1px solid var(--gray-100);border-radius:12px;background:var(--gray-50)">
+          <p style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Email</p>
+          <p style="font-weight:700">${data.email?`<a href="mailto:${esc(data.email)}" style="color:var(--black);text-decoration:none">${esc(data.email)}</a>`:'Not available yet'}</p>
+        </div>
+        <div style="padding:16px;border:1px solid var(--gray-100);border-radius:12px;background:var(--gray-50)">
+          <p style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Phone</p>
+          <p style="font-weight:700">${data.phone?`<a href="tel:${esc(data.phone)}" style="color:var(--black);text-decoration:none">${esc(data.phone)}</a>`:'Not available yet'}</p>
+        </div>
+        <div style="padding:16px;border:1px solid var(--gray-100);border-radius:12px;background:var(--gray-50)">
+          <p style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Chat</p>
+          <p style="font-weight:700">${data.chatbot?`<a href="${esc(data.chatbot)}" target="_blank" rel="noopener" style="color:var(--black);text-decoration:none">Open support chat</a>`:'Not available yet'}</p>
+        </div>
+        <div style="padding:16px;border:1px solid var(--gray-100);border-radius:12px;background:var(--gray-50)">
+          <p style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Help Center</p>
+          <p style="font-weight:700">${data.helpCenter?`<a href="${esc(data.helpCenter)}" target="_blank" rel="noopener" style="color:var(--black);text-decoration:none">Visit help center</a>`:'Not available yet'}</p>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:18px;border-radius:12px;background:#fff;border:1px solid var(--gray-100)">
+        <p style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Support Hours</p>
+        <p style="font-weight:700;margin-bottom:12px">${esc(data.hours||'Not available yet')}</p>
+        <p style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Additional Notes</p>
+        <p style="font-size:14px;color:var(--gray-600);line-height:1.7">${esc(data.notes||'No additional guidance has been published yet.')}</p>
+      </div>`}
+    </div>
+  </div>`;
+}
+
 // SETTINGS
 // ──────────────────────────────────────────
 async function apSettings(el,tab){
@@ -7228,12 +7391,8 @@ async function aiSetDefault(id, provider){
 async function aiTestProvider(provider){
   toast(`Testing ${provider}...`,'⏳');
   try{
-    const res=await fetch(AI_GATEWAY_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${KEY}`,'apikey':KEY},
-      body:JSON.stringify({provider,systemPrompt:'You are a test assistant.',userPrompt:'Reply with just the word: ok',useWebSearch:false,maxTokens:20,feature:'test'})
-    });
-    const data=await res.json();
+    const invoked=await sb.invokeFunction('ai-gateway',{provider,systemPrompt:'You are a test assistant.',userPrompt:'Reply with just the word: ok',useWebSearch:false,maxTokens:20,feature:'test'});
+    const data=invoked?.error?{success:false,error:invoked.error.message||String(invoked.error)}:invoked.data;
     if(data.success&&data.result){
       toast(`✅ ${provider} is working!`,'✅');
     } else {
@@ -7262,29 +7421,20 @@ const AI_CONFIG={
   provider: localStorage.getItem('glonni_ai_provider')||'anthropic',
   useWebSearch:true,
 };
-const AI_GATEWAY_URL=`${API}/functions/v1/ai-gateway`;
 
 // callAI — calls the secure backend edge function
 // Uses the Supabase anon key — no user JWT needed
 async function callAI(systemPrompt, userPrompt, opts={}){
   try{
-    const res=await fetch(AI_GATEWAY_URL,{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':`Bearer ${KEY}`,
-        'apikey':KEY,
-      },
-      body:JSON.stringify({
-        provider:AI_CONFIG.provider,
-        systemPrompt,
-        userPrompt,
-        useWebSearch:opts.useWebSearch??AI_CONFIG.useWebSearch,
-        feature:opts.feature||'catalog_extract',
-        maxTokens:opts.maxTokens||4096,
-      })
+    const invoked=await sb.invokeFunction('ai-gateway',{
+      provider:AI_CONFIG.provider,
+      systemPrompt,
+      userPrompt,
+      useWebSearch:opts.useWebSearch??AI_CONFIG.useWebSearch,
+      feature:opts.feature||'catalog_extract',
+      maxTokens:opts.maxTokens||4096,
     });
-    const data=await res.json();
+    const data=invoked?.error?{success:false,error:invoked.error.message||String(invoked.error)}:invoked.data;
     if(!data.success){
       console.error('[AI Gateway]',data.error);
       toast('AI error: '+data.error,'❌');
@@ -11651,7 +11801,8 @@ function renderFooter(){
         <div>
           <h4>Company</h4>
           <a>About Us</a>
-          <a>Contact</a>
+          <a onclick="go('support-users')">User Support</a>
+          <a onclick="go('support-vendors')">Vendor Support</a>
           <a>Terms & Conditions</a>
           <a>Privacy Policy</a>
         </div>

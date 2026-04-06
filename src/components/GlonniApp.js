@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { createGlonniSupabaseBridge } from '@/lib/glonniSupabaseBridge';
 
 export default function GlonniApp() {
   const loaded = useRef(false);
@@ -9,6 +10,10 @@ export default function GlonniApp() {
     // Prevent double-load in dev mode (React strict mode)
     if (loaded.current) return;
     loaded.current = true;
+
+    // Expose Supabase bridge for the legacy script.
+    window.__glonniSupabaseBridge = createGlonniSupabaseBridge();
+    window.__glonniSupabaseUrl = window.__glonniSupabaseBridge.url;
 
     // Load the app script
     const script = document.createElement('script');
