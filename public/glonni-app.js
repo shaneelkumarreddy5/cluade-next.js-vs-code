@@ -5290,6 +5290,8 @@ async function logVendorBreach(vendorId, breachType, description){
 // ═══════════════════════════════════════════════════
 let _adminSection='overview';
 let _adminTab='';
+let _adminSidebarCollapsed=false;
+try{_adminSidebarCollapsed=localStorage.getItem('glonni_admin_sidebar')==='collapsed';}catch(e){}
 
 const ADMIN_NAV=[
   {id:'overview',  icon:'🏠', label:'Overview'},
@@ -5311,10 +5313,15 @@ const ADMIN_NAV=[
   s.id='admin-panel-css';
   s.textContent=`
 .ap-wrap{display:flex;min-height:calc(100vh - 64px);background:#F5F5F7}
-.ap-sidebar{width:220px;flex-shrink:0;background:#1C1C1E;display:flex;flex-direction:column;position:sticky;top:64px;height:calc(100vh - 64px);overflow-y:auto}
-.ap-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.ap-sidebar{width:220px;flex-shrink:0;background:#1C1C1E;display:flex;flex-direction:column;position:sticky;top:64px;height:calc(100vh - 64px);overflow-y:auto;transition:width .2s ease}
+.ap-sidebar.collapsed{width:74px}
+.ap-sidebar.collapsed.hover-open{width:220px}
+.ap-logo{padding:16px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
+.ap-logo-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ap-logo-title{font-size:15px;font-weight:900;color:#fff;letter-spacing:-.3px}
 .ap-logo-sub{font-size:11px;color:rgba(255,255,255,.3);margin-top:2px}
+.ap-sidebar-toggle{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#fff;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.ap-sidebar-toggle:hover{background:rgba(255,255,255,.12)}
 .ap-nav{flex:1;padding:10px 0}
 .ap-nav-item{display:flex;align-items:center;gap:11px;padding:11px 18px;cursor:pointer;font-size:13px;font-weight:500;color:rgba(255,255,255,.5);border:none;background:transparent;width:100%;text-align:left;font-family:inherit;transition:all .15s;border-left:3px solid transparent}
 .ap-nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
@@ -5322,6 +5329,12 @@ const ADMIN_NAV=[
 .ap-nav-icon{font-size:16px;width:22px;text-align:center;flex-shrink:0}
 .ap-nav-badge{margin-left:auto;background:#FF3B30;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;line-height:16px}
 .ap-nav-footer{padding:14px 18px;border-top:1px solid rgba(255,255,255,.07)}
+.ap-sidebar.collapsed:not(.hover-open) .ap-logo-sub,.ap-sidebar.collapsed:not(.hover-open) .ap-nav-label,.ap-sidebar.collapsed:not(.hover-open) .ap-nav-badge,.ap-sidebar.collapsed:not(.hover-open) .ap-back-text{display:none}
+.ap-sidebar.collapsed:not(.hover-open) .ap-logo{padding:16px 8px}
+.ap-sidebar.collapsed:not(.hover-open) .ap-logo-top{justify-content:center}
+.ap-sidebar.collapsed:not(.hover-open) .ap-sidebar-toggle{position:absolute;top:16px;right:8px}
+.ap-sidebar.collapsed:not(.hover-open) .ap-nav-item{padding:11px 0;justify-content:center;border-left:0}
+.ap-sidebar.collapsed:not(.hover-open) .ap-nav-footer{padding:14px 8px}
 .ap-content{flex:1;padding:28px 32px;overflow-y:auto;min-width:0}
 .ap-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
 .ap-title{font-size:22px;font-weight:800;letter-spacing:-.3px}
@@ -5361,6 +5374,39 @@ const ADMIN_NAV=[
   document.head.appendChild(s);
 })();
 
+function apUpdateSidebarToggle(){
+  const icon=$('ap-sidebar-toggle-icon');
+  const btn=$('ap-sidebar-toggle');
+  if(!icon||!btn)return;
+  if(_adminSidebarCollapsed){
+    icon.textContent='☰';
+    btn.title='Open sidebar';
+  }else{
+    icon.textContent='✕';
+    btn.title='Close sidebar';
+  }
+}
+
+function apApplySidebarState(){
+  const sidebar=$('ap-sidebar');
+  if(!sidebar)return;
+  sidebar.classList.toggle('collapsed',_adminSidebarCollapsed);
+  if(!_adminSidebarCollapsed)sidebar.classList.remove('hover-open');
+  apUpdateSidebarToggle();
+}
+
+function apSidebarToggle(){
+  _adminSidebarCollapsed=!_adminSidebarCollapsed;
+  try{localStorage.setItem('glonni_admin_sidebar',_adminSidebarCollapsed?'collapsed':'open');}catch(e){}
+  apApplySidebarState();
+}
+
+function apSidebarHover(open){
+  const sidebar=$('ap-sidebar');
+  if(!sidebar||!_adminSidebarCollapsed)return;
+  sidebar.classList.toggle('hover-open',!!open);
+}
+
 async function renderAdminDash(section, tab){
   if(!PROFILE||PROFILE.role!=='admin'){go('home');return;}
   if(section)_adminSection=section;
@@ -5392,21 +5438,24 @@ async function renderAdminDash(section, tab){
   $('main').innerHTML=`
   <div class="ap-wrap">
     <!-- SIDEBAR -->
-    <div class="ap-sidebar">
+    <div class="ap-sidebar" id="ap-sidebar" onmouseenter="apSidebarHover(true)" onmouseleave="apSidebarHover(false)">
       <div class="ap-logo">
-        <div class="ap-logo-title">Glonni<span style="color:#EDCF5D">.</span></div>
+        <div class="ap-logo-top">
+          <div class="ap-logo-title">Glonni<span style="color:#EDCF5D">.</span></div>
+          <button class="ap-sidebar-toggle" id="ap-sidebar-toggle" onclick="apSidebarToggle()"><span id="ap-sidebar-toggle-icon">✕</span></button>
+        </div>
         <div class="ap-logo-sub">Admin Panel</div>
       </div>
       <nav class="ap-nav">
         ${ADMIN_NAV.map(n=>`
           <button class="ap-nav-item ${_adminSection===n.id?'active':''}" onclick="renderAdminDash('${n.id}','')">
             <span class="ap-nav-icon">${n.icon}</span>
-            <span style="flex:1">${n.label}</span>
+            <span class="ap-nav-label" style="flex:1">${n.label}</span>
             ${navBadges[n.id]?`<span class="ap-nav-badge">${navBadges[n.id]}</span>`:''}
           </button>`).join('')}
       </nav>
       <div class="ap-nav-footer">
-        <button class="ap-nav-item" style="padding:8px 0;color:rgba(255,255,255,.3);font-size:12px" onclick="go('home')">← Back to Store</button>
+        <button class="ap-nav-item" style="padding:8px 0;color:rgba(255,255,255,.3);font-size:12px" onclick="go('home')"><span class="ap-nav-icon">←</span><span class="ap-back-text">Back to Store</span></button>
       </div>
     </div>
     <!-- CONTENT -->
@@ -5416,6 +5465,7 @@ async function renderAdminDash(section, tab){
   </div>`;
 
   // Render selected section
+  apApplySidebarState();
   const attn={pendingVendors,pendingReview,pendingPayouts,openDisputes,pendingRules,pendingOffers,totalPayout,totalAttention};
   apRenderSection(_adminSection, _adminTab, attn);
 }
@@ -5934,6 +5984,137 @@ async function apMarketing(el,tab){
 // Category Management System
 const CATEGORY_CONSTS={GST_SLABS:['5%','12%','18%','28%']};
 let _catAllCats=[];
+let _catFormSlabs=[];
+let _catSlabCountMap={};
+let _catDragIdx=-1;
+
+function catMgrNum(v, fallback=0){
+  const n=parseFloat(v);
+  return Number.isFinite(n)?n:fallback;
+}
+
+function catMgrCommissionValue(cat){
+  const primary=catMgrNum(cat?.platform_commission, NaN);
+  if(Number.isFinite(primary))return primary;
+  return catMgrNum(cat?.platform_fee_percent, 0);
+}
+
+function catMgrRenderSlabRows(){
+  const rowsEl=$('cat-slab-rows');
+  if(!rowsEl)return;
+  if(!_catFormSlabs.length){
+    _catFormSlabs=[{min:'0',max:'',commission:'8'}];
+  }
+  rowsEl.innerHTML=_catFormSlabs.map((s,idx)=>`<div draggable="true" ondragstart="catMgrDragStart(event,${idx})" ondragover="catMgrDragOver(event)" ondrop="catMgrDrop(event,${idx})" ondragend="catMgrDragEnd()" style="display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:8px;border:1px dashed var(--gray-200);border-radius:8px;background:#fff">
+    <div style="display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:16px;cursor:grab" title="Drag to reorder">⋮⋮</div>
+    <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Min Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.min||'0')}" oninput="catMgrUpdateSlab(${idx},'min',this.value)"></div>
+    <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Max Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.max||'')}" placeholder="No max" oninput="catMgrUpdateSlab(${idx},'max',this.value)"></div>
+    <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Commission %</label><input class="form-input" type="number" min="0" max="100" step="0.1" value="${esc(s.commission||'0')}" oninput="catMgrUpdateSlab(${idx},'commission',this.value)"></div>
+    <button class="btn btn-ghost btn-sm btn-pill" onclick="catMgrRemoveSlab(${idx})" ${_catFormSlabs.length===1?'disabled':''}>✕</button>
+  </div>`).join('');
+}
+
+function catMgrSeedSlabs(rules=[]){
+  if(Array.isArray(rules)&&rules.length){
+    _catFormSlabs=rules.map(r=>({
+      min:String(catMgrNum(r.price_min,0)),
+      max:r.price_max==null?'':String(r.price_max),
+      commission:String(catMgrNum(r.commission_percent,0)),
+    }));
+  }else{
+    _catFormSlabs=[{min:'0',max:'',commission:String(catMgrNum($('cat-commission')?.value,8))}];
+  }
+  catMgrRenderSlabRows();
+}
+
+function catMgrUpdateSlab(idx,key,val){
+  if(!_catFormSlabs[idx])return;
+  _catFormSlabs[idx][key]=val;
+}
+
+function catMgrAddSlab(){
+  _catFormSlabs.push({min:'0',max:'',commission:String(catMgrNum($('cat-commission')?.value,8))});
+  catMgrRenderSlabRows();
+}
+
+function catMgrDragStart(e,idx){
+  _catDragIdx=idx;
+  try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(idx));}catch(err){}
+}
+
+function catMgrDragOver(e){e.preventDefault();}
+
+function catMgrDrop(e,targetIdx){
+  e.preventDefault();
+  if(_catDragIdx<0||_catDragIdx===targetIdx)return;
+  const moved=_catFormSlabs.splice(_catDragIdx,1)[0];
+  _catFormSlabs.splice(targetIdx,0,moved);
+  _catDragIdx=-1;
+  catMgrRenderSlabRows();
+}
+
+function catMgrDragEnd(){_catDragIdx=-1;}
+
+async function catMgrCopyParentSlabs(){
+  const parentId=$('cat-parent')?.value||'';
+  if(!parentId){toast('Select a parent category first','⚠️');return;}
+  const rows=await sb.get('commission_rules','price_min,price_max,commission_percent',{category_id:`eq.${parentId}`,product_id:'is.null',is_active:'eq.true',order:'price_min.asc,priority.desc'}).catch(()=>[]);
+  if(!rows.length){toast('No slabs found on parent category','⚠️');return;}
+  _catFormSlabs=rows.map(r=>({
+    min:String(catMgrNum(r.price_min,0)),
+    max:r.price_max==null?'':String(r.price_max),
+    commission:String(catMgrNum(r.commission_percent,0)),
+  }));
+  catMgrRenderSlabRows();
+  toast('Copied slabs from parent','✅');
+}
+
+function catMgrRemoveSlab(idx){
+  if(_catFormSlabs.length<=1)return;
+  _catFormSlabs.splice(idx,1);
+  catMgrRenderSlabRows();
+}
+
+function catMgrReadSlabs(){
+  const parsed=[];
+  for(const s of _catFormSlabs){
+    const hasAny=(s.min!==''||s.max!==''||s.commission!=='');
+    if(!hasAny)continue;
+    const min=catMgrNum(s.min,0);
+    const max=s.max===''?null:catMgrNum(s.max,NaN);
+    const commission=catMgrNum(s.commission,NaN);
+    if(min<0)return{ok:false,error:'Slab min price cannot be negative'};
+    if(max!==null&&!Number.isFinite(max))return{ok:false,error:'Enter valid max price or leave it empty'};
+    if(max!==null&&max<=min)return{ok:false,error:'Each slab max price must be greater than min price'};
+    if(!Number.isFinite(commission)||commission<0||commission>100)return{ok:false,error:'Each slab commission must be between 0 and 100'};
+    parsed.push({price_min:min,price_max:max,commission_percent:commission});
+  }
+  if(!parsed.length)return{ok:false,error:'Add at least one price-based slab'};
+  parsed.sort((a,b)=>a.price_min-b.price_min);
+  for(let i=1;i<parsed.length;i++){
+    const prev=parsed[i-1];
+    const curr=parsed[i];
+    if(prev.price_max===null)return{ok:false,error:'Only the last slab can have no max price'};
+    if(prev.price_max>curr.price_min)return{ok:false,error:'Slab ranges overlap. Please fix min/max values'};
+  }
+  return{ok:true,slabs:parsed};
+}
+
+async function catMgrSaveSlabs(categoryId,slabs){
+  await sb.del('commission_rules',{category_id:`eq.${categoryId}`,product_id:'is.null'}).catch(()=>false);
+  for(let i=0;i<slabs.length;i++){
+    const s=slabs[i];
+    await sb.ins('commission_rules',{
+      category_id:categoryId,
+      commission_percent:s.commission_percent,
+      price_min:s.price_min,
+      price_max:s.price_max,
+      priority:1000-i,
+      is_active:true,
+      effective_from:new Date().toISOString(),
+    }).catch(()=>[]);
+  }
+}
 
 async function apRefreshCatPage(){
   const el=document.getElementById('ap-content');
@@ -5941,7 +6122,13 @@ async function apRefreshCatPage(){
 }
 
 async function apCategories(el){
-  _catAllCats=await sb.get("categories","*",{order:"level.asc,sort_order.asc,name.asc"}).catch(()=>[]);
+  const [allCats,allSlabs]=await Promise.all([
+    sb.get("categories","*",{order:"level.asc,sort_order.asc,name.asc"}).catch(()=>[]),
+    sb.get('commission_rules','category_id,product_id,is_active',{product_id:'is.null',is_active:'eq.true'}).catch(()=>[]),
+  ]);
+  _catAllCats=allCats;
+  _catSlabCountMap={};
+  allSlabs.forEach(r=>{if(r.category_id)_catSlabCountMap[r.category_id]=(_catSlabCountMap[r.category_id]||0)+1;});
   const L1=_catAllCats.filter(c=>!c.parent_id);
   const L2=_catAllCats.filter(c=>c.parent_id&&L1.some(p=>p.id===c.parent_id));
   const L3=_catAllCats.filter(c=>c.parent_id&&L2.some(p=>p.id===c.parent_id));
@@ -6019,7 +6206,7 @@ async function apCategories(el){
     <div style="width:320px;flex-shrink:0">
       <div class="ap-card" style="height:100%;overflow-y:auto;max-height:calc(100vh - 400px)">
         <h3 style="font-weight:700;font-size:14px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500)">Category Tree</h3>
-        <div id="cat-tree">${tree.length?catMgrRenderTree(tree,_catAllCats):'<div style="color:var(--gray-400);text-align:center;padding:40px"><span style="font-size:40px;display:block;margin-bottom:12px">📂</span><p style="font-weight:600">No categories yet</p><p style="font-size:12px;margin-top:4px">Use the builder above to create your first category</p></div>'}</div>
+        <div id="cat-tree">${tree.length?catMgrRenderTree(tree,_catAllCats,_catSlabCountMap):'<div style="color:var(--gray-400);text-align:center;padding:40px"><span style="font-size:40px;display:block;margin-bottom:12px">📂</span><p style="font-weight:600">No categories yet</p><p style="font-size:12px;margin-top:4px">Use the builder above to create your first category</p></div>'}</div>
       </div>
     </div>
     <div style="flex:1;min-width:0">
@@ -6149,26 +6336,28 @@ async function ctbCreateAt(level){
 }
 
 // ── Category Tree Rendering ──
-function catMgrRenderTree(mainCats,allCats,depth=0){
+function catMgrRenderTree(mainCats,allCats,slabMap={},depth=0){
 return mainCats.map(cat=>{
 const children=allCats.filter(c=>c.parent_id===cat.id);
 const hasChildren=children.length>0;
 const isExpanded=JSON.parse(localStorage.getItem('cat-exp-'+cat.id)||'true');
 const levelBadge=['L1','L2','L3','L4'][cat.level]||'';
 const dotColor=cat.is_active?'var(--green)':'var(--orange)';
+const slabCount=slabMap[cat.id]||0;
 return '<div style="margin-bottom:3px">'
 +'<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'var(--gray-50)\'" onmouseout="this.style.background=\'transparent\'" onclick="catMgrSelectCategory(\''+cat.id+'\')">'
 +(hasChildren?'<button class="btn btn-ghost btn-sm" style="padding:0;width:18px;height:18px;font-size:10px" onclick="event.stopPropagation();catMgrToggleExpand(\''+cat.id+'\')">'+(isExpanded?'▼':'▶')+'</button>':'<span style="width:18px"></span>')
 +'<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';flex-shrink:0"></span>'
 +'<span style="flex:1;font-weight:500;font-size:13px">'+esc(cat.name)+'</span>'
++(slabCount?'<span style="font-size:10px;font-weight:700;color:var(--purple);background:rgba(175,82,222,.12);padding:2px 6px;border-radius:10px">'+slabCount+' slab'+(slabCount===1?'':'s')+'</span>':'')
 +'<span style="font-size:10px;font-weight:700;color:var(--blue);background:rgba(0,122,255,.08);padding:2px 6px;border-radius:4px">'+levelBadge+'</span>'
 +'</div>'
-+(hasChildren&&isExpanded?'<div style="margin-left:16px;border-left:2px solid var(--gray-200);padding-left:8px">'+catMgrRenderTree(children,allCats,depth+1)+'</div>':'')
++(hasChildren&&isExpanded?'<div style="margin-left:16px;border-left:2px solid var(--gray-200);padding-left:8px">'+catMgrRenderTree(children,allCats,slabMap,depth+1)+'</div>':'')
 +'</div>';
 }).join('');
 }
 
-function catMgrToggleExpand(catId){const isExpanded=JSON.parse(localStorage.getItem('cat-exp-'+catId)||'true');localStorage.setItem('cat-exp-'+catId,JSON.stringify(!isExpanded));const treeEl=$('cat-tree');if(treeEl){const tree=_catAllCats.filter(c=>!c.parent_id);treeEl.innerHTML=catMgrRenderTree(tree,_catAllCats);}}
+function catMgrToggleExpand(catId){const isExpanded=JSON.parse(localStorage.getItem('cat-exp-'+catId)||'true');localStorage.setItem('cat-exp-'+catId,JSON.stringify(!isExpanded));const treeEl=$('cat-tree');if(treeEl){const tree=_catAllCats.filter(c=>!c.parent_id);treeEl.innerHTML=catMgrRenderTree(tree,_catAllCats,_catSlabCountMap);}}
 async function catMgrSelectCategory(catId){
 const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
 if(!cat)return;
@@ -6176,7 +6365,12 @@ const content=document.getElementById('cat-content');
 if(!content)return;
 const parent=cat.parent_id?(await sb.get("categories","id,name",{id:`eq.${cat.parent_id}`}).catch(()=>[]))[0]:null;
 const children=await sb.get("categories","id,name",{parent_id:`eq.${catId}`}).catch(()=>[]);
-content.innerHTML=`<div style="max-width:600px"><div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--gray-200)"><div><h2 style="font-size:24px;font-weight:800">${esc(cat.name)}</h2><p style="font-size:12px;color:var(--gray-400);margin-top:4px">Level ${cat.level}</p></div><div style="display:flex;gap:8px"><button class="btn btn-outline btn-pill btn-sm" onclick="catMgrShowEditForm('${cat.id}')">✏️ Edit</button><button class="btn btn-danger btn-pill btn-sm" onclick="catMgrDeleteCategory('${cat.id}')">🗑️ Delete</button></div></div><div class="ap-card" style="margin-bottom:20px"><p style="font-weight:700;margin-bottom:16px">Business Rules</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">GST</p><p style="font-size:18px;font-weight:800;color:var(--gold-dark)">${cat.gst_slab}</p></div><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">Commission</p><p style="font-size:18px;font-weight:800;color:var(--blue)">${cat.platform_commission}%</p></div><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">Cashback</p><p style="font-size:18px;font-weight:800;color:var(--green)">${cat.user_cashback_percent}%</p></div><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">Affiliate</p><p style="font-size:18px;font-weight:800;color:var(--purple)">${cat.affiliate_percent}%</p></div></div></div>${parent?`<div class="ap-card" style="margin-bottom:20px"><p style="font-weight:700;margin-bottom:8px">Parent Category</p><p style="font-size:14px;color:var(--gray-600)">${esc(parent.name)}</p></div>`:''} ${children.length>0?`<div class="ap-card"><p style="font-weight:700;margin-bottom:12px">Sub Categories (${children.length})</p><div style="display:flex;flex-direction:column;gap:8px">${children.map(child=>`<div style="padding:10px;background:var(--gray-50);border-radius:6px;cursor:pointer" onclick="catMgrSelectCategory('${child.id}')">${esc(child.name)}</div>`).join('')}</div></div>`:''}</div>`;
+const slabs=await sb.get('commission_rules','id,price_min,price_max,commission_percent,is_active',{category_id:`eq.${catId}`,product_id:'is.null',is_active:'eq.true',order:'price_min.asc,priority.desc'}).catch(()=>[]);
+const gstDisplay=cat.gst_slab||'Not set';
+const commValue=catMgrCommissionValue(cat);
+const cashback=catMgrNum(cat.user_cashback_percent,0);
+const affiliate=catMgrNum(cat.affiliate_percent,0);
+content.innerHTML=`<div style="max-width:700px"><div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--gray-200)"><div><h2 style="font-size:24px;font-weight:800">${esc(cat.name)}</h2><p style="font-size:12px;color:var(--gray-400);margin-top:4px">Level ${cat.level}</p></div><div style="display:flex;gap:8px"><button class="btn btn-outline btn-pill btn-sm" onclick="catMgrShowEditForm('${cat.id}')">✏️ Edit</button><button class="btn btn-danger btn-pill btn-sm" onclick="catMgrDeleteCategory('${cat.id}')">🗑️ Delete</button></div></div><div class="ap-card" style="margin-bottom:20px"><p style="font-weight:700;margin-bottom:16px">Business Rules</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">GST</p><p style="font-size:18px;font-weight:800;color:var(--gold-dark)">${esc(gstDisplay)}</p></div><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">Commission</p><p style="font-size:18px;font-weight:800;color:var(--blue)">${commValue}%</p></div><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">Cashback</p><p style="font-size:18px;font-weight:800;color:var(--green)">${cashback}%</p></div><div style="padding:12px;background:var(--gray-50);border-radius:8px"><p style="font-size:11px;color:var(--gray-500);text-transform:uppercase;font-weight:600;margin-bottom:4px">Affiliate</p><p style="font-size:18px;font-weight:800;color:var(--purple)">${affiliate}%</p></div></div></div><div class="ap-card" style="margin-bottom:20px"><p style="font-weight:700;margin-bottom:12px">Price Based Commission Slabs</p>${slabs.length?`<div style="display:flex;flex-direction:column;gap:8px">${slabs.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--gray-50);border-radius:8px"><span style="font-size:13px;color:var(--gray-600)">₹${catMgrNum(s.price_min,0)}${s.price_max!=null?` - ₹${catMgrNum(s.price_max,0)}`:'+'}</span><span style="font-weight:800;color:var(--blue)">${catMgrNum(s.commission_percent,0)}%</span></div>`).join('')}</div>`:'<p style="font-size:13px;color:var(--gray-400)">No slabs configured yet.</p>'}</div>${parent?`<div class="ap-card" style="margin-bottom:20px"><p style="font-weight:700;margin-bottom:8px">Parent Category</p><p style="font-size:14px;color:var(--gray-600)">${esc(parent.name)}</p></div>`:''} ${children.length>0?`<div class="ap-card"><p style="font-weight:700;margin-bottom:12px">Sub Categories (${children.length})</p><div style="display:flex;flex-direction:column;gap:8px">${children.map(child=>`<div style="padding:10px;background:var(--gray-50);border-radius:6px;cursor:pointer" onclick="catMgrSelectCategory('${child.id}')">${esc(child.name)}</div>`).join('')}</div></div>`:''}</div>`;
 }
 async function catMgrShowAddForm(parentId=null){
 const modal=document.getElementById('cat-modal');
@@ -6187,8 +6381,9 @@ if(parentId)parentCat=(await sb.get("categories","*",{id:`eq.${parentId}`}).catc
 const allCats=await sb.get("categories","id,name,level",{is_active:"eq.true",order:"name.asc"}).catch(()=>[]);
 const validParents=parentId?[]:allCats.filter(c=>c.level<3);
 titleEl.textContent='Add New Category';
-formEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:16px"><div class="form-group"><label class="form-label">Category Name *</label><input class="form-input" id="cat-name" placeholder="e.g., Electronics" maxlength="100"></div>${!parentId?`<div class="form-group"><label class="form-label">Parent Category</label><select class="form-select" id="cat-parent"><option value="">— Main Category —</option>${validParents.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>`:`<div style="padding:12px;background:var(--gold-light);border-radius:8px"><p style="font-size:12px">📁 Parent: <strong>${esc(parentCat.name)}</strong></p></div><input type="hidden" id="cat-parent" value="${parentId}">`}<div class="form-group"><label class="form-label">GST Slab *</label><select class="form-select" id="cat-gst">${CATEGORY_CONSTS.GST_SLABS.map(slab=>`<option value="${slab}">${slab}</option>`).join('')}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Platform Commission (%)</label><input class="form-input" id="cat-commission" type="number" min="0" max="100" step="0.5" value="8"></div><div class="form-group"><label class="form-label">User Cashback (%)</label><input class="form-input" id="cat-cashback" type="number" min="0" max="100" step="0.5" value="0"></div></div><div class="form-group"><label class="form-label">Affiliate Commission (%)</label><input class="form-input" id="cat-affiliate" type="number" min="0" max="100" step="0.5" value="0"></div><div style="background:var(--gray-50);padding:12px;border-radius:8px;border-left:3px solid var(--orange);font-size:12px;color:var(--gray-600)">💡 Cashback + Affiliate must not exceed Commission</div><div style="display:flex;gap:8px"><button class="btn btn-gold btn-pill" onclick="catMgrSaveCategory('${parentId||''}')">Save Category</button><button class="btn btn-outline btn-pill" onclick="catMgrCloseForm()">Cancel</button></div></div>`;
+formEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:16px"><div class="form-group"><label class="form-label">Category Name *</label><input class="form-input" id="cat-name" placeholder="e.g., Electronics" maxlength="100"></div>${!parentId?`<div class="form-group"><label class="form-label">Parent Category</label><select class="form-select" id="cat-parent"><option value="">— Main Category —</option>${validParents.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>`:`<div style="padding:12px;background:var(--gold-light);border-radius:8px"><p style="font-size:12px">📁 Parent: <strong>${esc(parentCat.name)}</strong></p></div><input type="hidden" id="cat-parent" value="${parentId}">`}<div class="form-group"><label class="form-label">GST Slab *</label><select class="form-select" id="cat-gst">${CATEGORY_CONSTS.GST_SLABS.map(slab=>`<option value="${slab}">${slab}</option>`).join('')}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Platform Commission (%)</label><input class="form-input" id="cat-commission" type="number" min="0" max="100" step="0.5" value="8"></div><div class="form-group"><label class="form-label">User Cashback (%)</label><input class="form-input" id="cat-cashback" type="number" min="0" max="100" step="0.5" value="0"></div></div><div class="form-group"><label class="form-label">Affiliate Commission (%)</label><input class="form-input" id="cat-affiliate" type="number" min="0" max="100" step="0.5" value="0"></div><div class="ap-card" style="margin:0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><p style="font-weight:700;font-size:13px">Price Based Commission Slabs</p><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm btn-pill" onclick="catMgrCopyParentSlabs()">⎘ Copy Parent</button><button class="btn btn-outline btn-sm btn-pill" onclick="catMgrAddSlab()">+ Add Slab</button></div></div><div id="cat-slab-rows"></div><p style="font-size:11px;color:var(--gray-400);margin-top:6px">Drag rows to reorder slabs. Example: 0-1000 = 8%, 1000-2000 = 10%. Last slab can have empty max.</p></div><div style="background:var(--gray-50);padding:12px;border-radius:8px;border-left:3px solid var(--orange);font-size:12px;color:var(--gray-600)">💡 Cashback + Affiliate must not exceed slab commission</div><div style="display:flex;gap:8px"><button class="btn btn-gold btn-pill" onclick="catMgrSaveCategory('${parentId||''}')">Save Category</button><button class="btn btn-outline btn-pill" onclick="catMgrCloseForm()">Cancel</button></div></div>`;
 modal.classList.remove('hide');
+catMgrSeedSlabs();
 document.getElementById('cat-name').focus();
 }
 async function catMgrShowEditForm(catId){
@@ -6199,9 +6394,11 @@ const formEl=document.getElementById('cat-form');
 const titleEl=document.getElementById('cat-modal-title');
 const allCats=await sb.get("categories","id,name,level",{is_active:"eq.true",order:"name.asc"}).catch(()=>[]);
 const validParents=allCats.filter(c=>c.level<cat.level&&c.id!==catId);
+const existingSlabs=await sb.get('commission_rules','id,price_min,price_max,commission_percent',{category_id:`eq.${catId}`,product_id:'is.null',order:'price_min.asc,priority.desc'}).catch(()=>[]);
 titleEl.textContent=`Edit: ${esc(cat.name)}`;
-formEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:16px"><div class="form-group"><label class="form-label">Category Name *</label><input class="form-input" id="cat-name" value="${esc(cat.name)}" maxlength="100"></div><div class="form-group"><label class="form-label">Parent Category</label><select class="form-select" id="cat-parent"><option value="">— Main Category —</option>${validParents.map(p=>`<option value="${p.id}" ${cat.parent_id===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">GST Slab *</label><select class="form-select" id="cat-gst">${CATEGORY_CONSTS.GST_SLABS.map(slab=>`<option value="${slab}" ${cat.gst_slab===slab?'selected':''}>${slab}</option>`).join('')}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Platform Commission (%)</label><input class="form-input" id="cat-commission" type="number" min="0" max="100" step="0.5" value="${cat.platform_commission}"></div><div class="form-group"><label class="form-label">User Cashback (%)</label><input class="form-input" id="cat-cashback" type="number" min="0" max="100" step="0.5" value="${cat.user_cashback_percent}"></div></div><div class="form-group"><label class="form-label">Affiliate Commission (%)</label><input class="form-input" id="cat-affiliate" type="number" min="0" max="100" step="0.5" value="${cat.affiliate_percent}"></div><div style="background:var(--gray-50);padding:12px;border-radius:8px;border-left:3px solid var(--orange);font-size:12px;color:var(--gray-600)">💡 Cashback + Affiliate must not exceed Commission</div><div style="display:flex;gap:8px"><button class="btn btn-gold btn-pill" onclick="catMgrUpdateCategory('${catId}')">Save Changes</button><button class="btn btn-outline btn-pill" onclick="catMgrCloseForm()">Cancel</button></div></div>`;
+formEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:16px"><div class="form-group"><label class="form-label">Category Name *</label><input class="form-input" id="cat-name" value="${esc(cat.name)}" maxlength="100"></div><div class="form-group"><label class="form-label">Parent Category</label><select class="form-select" id="cat-parent"><option value="">— Main Category —</option>${validParents.map(p=>`<option value="${p.id}" ${cat.parent_id===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">GST Slab *</label><select class="form-select" id="cat-gst">${CATEGORY_CONSTS.GST_SLABS.map(slab=>`<option value="${slab}" ${cat.gst_slab===slab?'selected':''}>${slab}</option>`).join('')}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Platform Commission (%)</label><input class="form-input" id="cat-commission" type="number" min="0" max="100" step="0.5" value="${catMgrCommissionValue(cat)}"></div><div class="form-group"><label class="form-label">User Cashback (%)</label><input class="form-input" id="cat-cashback" type="number" min="0" max="100" step="0.5" value="${catMgrNum(cat.user_cashback_percent,0)}"></div></div><div class="form-group"><label class="form-label">Affiliate Commission (%)</label><input class="form-input" id="cat-affiliate" type="number" min="0" max="100" step="0.5" value="${catMgrNum(cat.affiliate_percent,0)}"></div><div class="ap-card" style="margin:0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><p style="font-weight:700;font-size:13px">Price Based Commission Slabs</p><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm btn-pill" onclick="catMgrCopyParentSlabs()">⎘ Copy Parent</button><button class="btn btn-outline btn-sm btn-pill" onclick="catMgrAddSlab()">+ Add Slab</button></div></div><div id="cat-slab-rows"></div><p style="font-size:11px;color:var(--gray-400);margin-top:6px">Drag rows to reorder slabs. Example: 0-1000 = 8%, 1000-2000 = 10%. Last slab can have empty max.</p></div><div style="background:var(--gray-50);padding:12px;border-radius:8px;border-left:3px solid var(--orange);font-size:12px;color:var(--gray-600)">💡 Cashback + Affiliate must not exceed slab commission</div><div style="display:flex;gap:8px"><button class="btn btn-gold btn-pill" onclick="catMgrUpdateCategory('${catId}')">Save Changes</button><button class="btn btn-outline btn-pill" onclick="catMgrCloseForm()">Cancel</button></div></div>`;
 modal.classList.remove('hide');
+catMgrSeedSlabs(existingSlabs);
 document.getElementById('cat-name').focus();
 }
 function catMgrCloseForm(){document.getElementById('cat-modal').classList.add('hide');}
@@ -6226,12 +6423,21 @@ const cashback=document.getElementById('cat-cashback').value;
 const affiliate=document.getElementById('cat-affiliate').value;
 const valid=await catMgrValidate(name,parentInput||null,gst,commission,cashback,affiliate);
 if(!valid)return;
+const slabRes=catMgrReadSlabs();
+if(!slabRes.ok){toast(slabRes.error,'⚠️');return;}
+const minSlabCommission=Math.min(...slabRes.slabs.map(s=>s.commission_percent));
+if((catMgrNum(cashback,0)+catMgrNum(affiliate,0))>minSlabCommission){toast('Cashback + Affiliate cannot exceed the minimum slab commission','⚠️');return;}
 let level=1;
 if(valid.parentId){const parent=(await sb.get("categories","level",{id:`eq.${valid.parentId}`}).catch(()=>[]))[0];if(parent)level=parent.level+1;if(level>3){toast('Cannot nest more than 3 levels','⚠️');return;}}
 const existing=await sb.get("categories","id",{name:`eq.${valid.name}`,parent_id:valid.parentId?`eq.${valid.parentId}`:'is.null'}).catch(()=>[]);
 if(existing.length>0){toast('Category exists','⚠️');return;}
 const r=await sb.ins("categories",{name:valid.name,parent_id:valid.parentId,level,gst_slab:valid.gst,platform_commission:valid.commission,user_cashback_percent:valid.cashback,affiliate_percent:valid.affiliate,is_active:true,created_by:PROFILE.id}).catch(()=>null);
-if(r){toast(`"${valid.name}" created!`,'✅');catMgrCloseForm();apRefreshCatPage();}else{toast('Error','❌');}
+if(Array.isArray(r)&&r.length){
+  await catMgrSaveSlabs(r[0].id,slabRes.slabs);
+  toast(`"${valid.name}" created!`,'✅');
+  catMgrCloseForm();
+  apRefreshCatPage();
+}else{toast('Error while creating category','❌');}
 }
 async function catMgrUpdateCategory(catId){
 const name=document.getElementById('cat-name').value;
@@ -6242,12 +6448,21 @@ const cashback=document.getElementById('cat-cashback').value;
 const affiliate=document.getElementById('cat-affiliate').value;
 const valid=await catMgrValidate(name,parentInput||null,gst,commission,cashback,affiliate);
 if(!valid)return;
+const slabRes=catMgrReadSlabs();
+if(!slabRes.ok){toast(slabRes.error,'⚠️');return;}
+const minSlabCommission=Math.min(...slabRes.slabs.map(s=>s.commission_percent));
+if((catMgrNum(cashback,0)+catMgrNum(affiliate,0))>minSlabCommission){toast('Cashback + Affiliate cannot exceed the minimum slab commission','⚠️');return;}
 const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
 if(!cat)return toast('Category not found','❌');
 const existing=await sb.get("categories","id",{name:`eq.${valid.name}`,parent_id:valid.parentId?`eq.${valid.parentId}`:'is.null',id:`neq.${catId}`}).catch(()=>[]);
 if(existing.length>0){toast('Category exists','⚠️');return;}
 const r=await sb.upd("categories",{name:valid.name,parent_id:valid.parentId,gst_slab:valid.gst,platform_commission:valid.commission,user_cashback_percent:valid.cashback,affiliate_percent:valid.affiliate,updated_by:PROFILE.id,updated_at:new Date().toISOString()},{id:`eq.${catId}`}).catch(()=>null);
-if(r){toast(`"${valid.name}" updated!`,'✅');catMgrCloseForm();apRefreshCatPage();}else{toast('Error','❌');}
+if(Array.isArray(r)&&r.length){
+  await catMgrSaveSlabs(catId,slabRes.slabs);
+  toast(`"${valid.name}" updated!`,'✅');
+  catMgrCloseForm();
+  apRefreshCatPage();
+}else{toast('Error while updating category (possibly blocked by permissions)', '❌');}
 }
 async function catMgrDeleteCategory(catId){
 const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
