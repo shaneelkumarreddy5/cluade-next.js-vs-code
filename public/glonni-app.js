@@ -6001,18 +6001,15 @@ function catMgrCommissionValue(cat){
 
 function catMgrRenderSlabRows(){
   const rowsEl=$('cat-slab-rows');
-  if(!rowsEl)return;
-  if(!_catFormSlabs.length){
-    _catFormSlabs=[{min:'0',max:'',commission:'8'}];
+        if(!rowsEl)return;
+        rowsEl.innerHTML=_catFormSlabs.length?_catFormSlabs.map((s,idx)=>`<div draggable="true" ondragstart="catMgrDragStart(event,${idx})" ondragover="catMgrDragOver(event)" ondrop="catMgrDrop(event,${idx})" ondragend="catMgrDragEnd()" style="display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:8px;border:1px dashed var(--gray-200);border-radius:8px;background:#fff">
+          <div style="display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:16px;cursor:grab" title="Drag to reorder">⋮⋮</div>
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Min Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.min||'0')}" oninput="catMgrUpdateSlab(${idx},'min',this.value)"></div>
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Max Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.max||'')}" placeholder="No max" oninput="catMgrUpdateSlab(${idx},'max',this.value)"></div>
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Commission %</label><input class="form-input" type="number" min="0" max="100" step="0.1" value="${esc(s.commission||'0')}" oninput="catMgrUpdateSlab(${idx},'commission',this.value)"></div>
+          <button class="btn btn-ghost btn-sm btn-pill" onclick="catMgrRemoveSlab(${idx})">✕</button>
+        </div>`).join(''):'<p style="font-size:12px;color:var(--gray-400);padding:8px">No slabs configured. Click "Add Slab" to create one.</p>';
   }
-  rowsEl.innerHTML=_catFormSlabs.map((s,idx)=>`<div draggable="true" ondragstart="catMgrDragStart(event,${idx})" ondragover="catMgrDragOver(event)" ondrop="catMgrDrop(event,${idx})" ondragend="catMgrDragEnd()" style="display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:8px;border:1px dashed var(--gray-200);border-radius:8px;background:#fff">
-    <div style="display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:16px;cursor:grab" title="Drag to reorder">⋮⋮</div>
-    <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Min Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.min||'0')}" oninput="catMgrUpdateSlab(${idx},'min',this.value)"></div>
-    <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Max Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.max||'')}" placeholder="No max" oninput="catMgrUpdateSlab(${idx},'max',this.value)"></div>
-    <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Commission %</label><input class="form-input" type="number" min="0" max="100" step="0.1" value="${esc(s.commission||'0')}" oninput="catMgrUpdateSlab(${idx},'commission',this.value)"></div>
-    <button class="btn btn-ghost btn-sm btn-pill" onclick="catMgrRemoveSlab(${idx})" ${_catFormSlabs.length===1?'disabled':''}>✕</button>
-  </div>`).join('');
-}
 
 function catMgrSeedSlabs(rules=[]){
   if(Array.isArray(rules)&&rules.length){
@@ -6022,7 +6019,7 @@ function catMgrSeedSlabs(rules=[]){
       commission:String(catMgrNum(r.commission_percent,0)),
     }));
   }else{
-    _catFormSlabs=[{min:'0',max:'',commission:String(catMgrNum($('cat-commission')?.value,8))}];
+          _catFormSlabs=[];
   }
   catMgrRenderSlabRows();
 }
@@ -6070,7 +6067,6 @@ async function catMgrCopyParentSlabs(){
 }
 
 function catMgrRemoveSlab(idx){
-  if(_catFormSlabs.length<=1)return;
   _catFormSlabs.splice(idx,1);
   catMgrRenderSlabRows();
 }
@@ -6089,7 +6085,6 @@ function catMgrReadSlabs(){
     if(!Number.isFinite(commission)||commission<0||commission>100)return{ok:false,error:'Each slab commission must be between 0 and 100'};
     parsed.push({price_min:min,price_max:max,commission_percent:commission});
   }
-  if(!parsed.length)return{ok:false,error:'Add at least one price-based slab'};
   parsed.sort((a,b)=>a.price_min-b.price_min);
   for(let i=1;i<parsed.length;i++){
     const prev=parsed[i-1];
@@ -6098,7 +6093,8 @@ function catMgrReadSlabs(){
     if(prev.price_max>curr.price_min)return{ok:false,error:'Slab ranges overlap. Please fix min/max values'};
   }
   return{ok:true,slabs:parsed};
-}
+  }
+
 
 async function catMgrSaveSlabs(categoryId,slabs){
   await sb.del('commission_rules',{category_id:`eq.${categoryId}`,product_id:'is.null'}).catch(()=>false);
@@ -6425,8 +6421,10 @@ const valid=await catMgrValidate(name,parentInput||null,gst,commission,cashback,
 if(!valid)return;
 const slabRes=catMgrReadSlabs();
 if(!slabRes.ok){toast(slabRes.error,'⚠️');return;}
-const minSlabCommission=Math.min(...slabRes.slabs.map(s=>s.commission_percent));
-if((catMgrNum(cashback,0)+catMgrNum(affiliate,0))>minSlabCommission){toast('Cashback + Affiliate cannot exceed the minimum slab commission','⚠️');return;}
+if(slabRes.slabs.length>0){
+  const minSlabCommission=Math.min(...slabRes.slabs.map(s=>s.commission_percent));
+  if((catMgrNum(cashback,0)+catMgrNum(affiliate,0))>minSlabCommission){toast('Cashback + Affiliate cannot exceed the minimum slab commission','⚠️');return;}
+}
 let level=1;
 if(valid.parentId){const parent=(await sb.get("categories","level",{id:`eq.${valid.parentId}`}).catch(()=>[]))[0];if(parent)level=parent.level+1;if(level>3){toast('Cannot nest more than 3 levels','⚠️');return;}}
 const existing=await sb.get("categories","id",{name:`eq.${valid.name}`,parent_id:valid.parentId?`eq.${valid.parentId}`:'is.null'}).catch(()=>[]);
@@ -6450,8 +6448,10 @@ const valid=await catMgrValidate(name,parentInput||null,gst,commission,cashback,
 if(!valid)return;
 const slabRes=catMgrReadSlabs();
 if(!slabRes.ok){toast(slabRes.error,'⚠️');return;}
-const minSlabCommission=Math.min(...slabRes.slabs.map(s=>s.commission_percent));
-if((catMgrNum(cashback,0)+catMgrNum(affiliate,0))>minSlabCommission){toast('Cashback + Affiliate cannot exceed the minimum slab commission','⚠️');return;}
+if(slabRes.slabs.length>0){
+  const minSlabCommission=Math.min(...slabRes.slabs.map(s=>s.commission_percent));
+  if((catMgrNum(cashback,0)+catMgrNum(affiliate,0))>minSlabCommission){toast('Cashback + Affiliate cannot exceed the minimum slab commission','⚠️');return;}
+}
 const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
 if(!cat)return toast('Category not found','❌');
 const existing=await sb.get("categories","id",{name:`eq.${valid.name}`,parent_id:valid.parentId?`eq.${valid.parentId}`:'is.null',id:`neq.${catId}`}).catch(()=>[]);
