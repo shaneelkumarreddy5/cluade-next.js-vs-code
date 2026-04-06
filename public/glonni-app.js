@@ -5982,7 +5982,7 @@ async function apMarketing(el,tab){
 }
 
 // Category Management System
-const CATEGORY_CONSTS={GST_SLABS:['5%','12%','18%','28%']};
+const CATEGORY_CONSTS={GST_SLABS:['0%','5%','12%','18%','28%']};
 let _catAllCats=[];
 let _catFormSlabs=[];
 let _catSlabCountMap={};

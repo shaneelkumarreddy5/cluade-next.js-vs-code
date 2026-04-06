@@ -283,7 +283,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)!im
 
 /* ═══ AUTH MODAL ═══ */
 .auth-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
-.auth-card{background:var(--white);border-radius:var(--radius-xl);padding:40px;max-width:440px;width:100%;box-shadow:var(--shadow-xl);animation:fadeUp .3s ease}
+.auth-card{background:var(--white);border-radius:var(--radius-xl);padding:40px;max-width:440px;width:100%;box-shadow:var(--shadow-xl);animation:fadeUp .3s ease;max-height:90vh;overflow-y:auto}
 .auth-logo{font-size:32px;font-weight:900;text-align:center;margin-bottom:4px;letter-spacing:-1px}.auth-logo i{color:var(--gold);font-style:normal}
 .auth-sub{text-align:center;color:var(--gray-400);font-size:14px;margin-bottom:28px}
 
