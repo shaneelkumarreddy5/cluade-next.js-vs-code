@@ -5994,9 +5994,9 @@ function catMgrNum(v, fallback=0){
 }
 
 function catMgrCommissionValue(cat){
-  const primary=catMgrNum(cat?.platform_commission, NaN);
-  if(Number.isFinite(primary))return primary;
-  return catMgrNum(cat?.platform_fee_percent, 0);
+  if(!cat)return 0;
+  const key=catMgrPickColumn(cat,['platform_commission','platform_fee_percent','platform_fee_pct'])||catMgrPickColumnLike(cat,['platform','commission']);
+  return key?catMgrNum(cat[key],0):0;
 }
 
 function catMgrPickColumn(row,candidates=[]){
@@ -6007,25 +6007,35 @@ function catMgrPickColumn(row,candidates=[]){
   return null;
 }
 
+function catMgrPickColumnLike(row,parts=[]){
+  if(!row)return null;
+  const keys=Object.keys(row||{});
+  for(const key of keys){
+    const k=String(key).toLowerCase();
+    if(parts.every(p=>k.includes(String(p).toLowerCase())))return key;
+  }
+  return null;
+}
+
 function catMgrSchemaSample(){
   return Array.isArray(_catAllCats)&&_catAllCats.length?_catAllCats[0]:null;
 }
 
 function catMgrAffiliateValue(cat){
   if(!cat)return 0;
-  const key=catMgrPickColumn(cat,['affiliate_percent','affiliate_commission','affiliate_commission_pct','affiliate']);
+  const key=catMgrPickColumn(cat,['affiliate_percent','affiliate_commission','affiliate_commission_pct','affiliate','affliate_percent','affilate_percent'])||catMgrPickColumnLike(cat,['affiliate']);
   return key?catMgrNum(cat[key],0):0;
 }
 
 function catMgrCashbackValue(cat){
   if(!cat)return 0;
-  const key=catMgrPickColumn(cat,['user_cashback_percent','cashback_percent','user_cashback','cashback']);
+  const key=catMgrPickColumn(cat,['user_cashback_percent','cashback_percent','user_cashback','cashback'])||catMgrPickColumnLike(cat,['cashback']);
   return key?catMgrNum(cat[key],0):0;
 }
 
 function catMgrGstValue(cat){
   if(!cat)return '';
-  const key=catMgrPickColumn(cat,['gst_slab','gst_rate','gst_percent','gst']);
+  const key=catMgrPickColumn(cat,['gst_slab','gst_rate','gst_percent','gst'])||catMgrPickColumnLike(cat,['gst']);
   return key?String(cat[key]??''):'';
 }
 
@@ -6036,10 +6046,10 @@ function catMgrBuildCategoryPayload(valid,row=null,{isUpdate=false}={}){
     parent_id:valid.parentId,
   };
 
-  const gstCol=catMgrPickColumn(sample,['gst_slab','gst_rate','gst_percent','gst']);
-  const platformCol=catMgrPickColumn(sample,['platform_commission','platform_fee_percent','platform_fee_pct'])||'platform_commission';
-  const cashbackCol=catMgrPickColumn(sample,['user_cashback_percent','cashback_percent','user_cashback'])||'user_cashback_percent';
-  const affiliateCol=catMgrPickColumn(sample,['affiliate_percent','affiliate_commission','affiliate_commission_pct','affiliate']);
+  const gstCol=catMgrPickColumn(sample,['gst_slab','gst_rate','gst_percent','gst'])||catMgrPickColumnLike(sample,['gst']);
+  const platformCol=catMgrPickColumn(sample,['platform_commission','platform_fee_percent','platform_fee_pct'])||catMgrPickColumnLike(sample,['platform','commission'])||'platform_commission';
+  const cashbackCol=catMgrPickColumn(sample,['user_cashback_percent','cashback_percent','user_cashback','cashback'])||catMgrPickColumnLike(sample,['cashback'])||'user_cashback_percent';
+  const affiliateCol=catMgrPickColumn(sample,['affiliate_percent','affiliate_commission','affiliate_commission_pct','affiliate','affliate_percent','affilate_percent'])||catMgrPickColumnLike(sample,['affiliate']);
 
   if(gstCol)payload[gstCol]=valid.gst;
   payload[platformCol]=valid.commission;
@@ -6086,8 +6096,8 @@ async function catMgrSafeInsCategory(payload){
 function catMgrRenderSlabRows(){
   const rowsEl=$('cat-slab-rows');
         if(!rowsEl)return;
-        rowsEl.innerHTML=_catFormSlabs.length?_catFormSlabs.map((s,idx)=>`<div draggable="true" ondragstart="catMgrDragStart(event,${idx})" ondragover="catMgrDragOver(event)" ondrop="catMgrDrop(event,${idx})" ondragend="catMgrDragEnd()" style="display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:8px;border:1px dashed var(--gray-200);border-radius:8px;background:#fff">
-          <div style="display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:16px;cursor:grab" title="Drag to reorder">⋮⋮</div>
+        rowsEl.innerHTML=_catFormSlabs.length?_catFormSlabs.map((s,idx)=>`<div ondragover="catMgrDragOver(event)" ondrop="catMgrDrop(event,${idx})" style="display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:8px;border:1px dashed var(--gray-200);border-radius:8px;background:#fff">
+          <div draggable="true" ondragstart="catMgrDragStart(event,${idx})" ondragend="catMgrDragEnd()" style="display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:16px;cursor:grab" title="Drag to reorder">⋮⋮</div>
           <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Min Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.min||'0')}" oninput="catMgrUpdateSlab(${idx},'min',this.value)"></div>
           <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Max Price ₹</label><input class="form-input" type="number" min="0" step="1" value="${esc(s.max||'')}" placeholder="No max" oninput="catMgrUpdateSlab(${idx},'max',this.value)"></div>
           <div class="form-group" style="margin:0"><label class="form-label" style="font-size:10px">Commission %</label><input class="form-input" type="number" min="0" max="100" step="0.1" value="${esc(s.commission||'0')}" oninput="catMgrUpdateSlab(${idx},'commission',this.value)"></div>
