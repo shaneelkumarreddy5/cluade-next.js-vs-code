@@ -99,8 +99,14 @@ function applyFilters(query, filters = {}) {
 }
 
 export function createGlonniSupabaseBridge() {
+  let _lastError = null;
+
   return {
     url: supabaseUrl,
+
+    lastError() {
+      return _lastError;
+    },
 
     auth: {
       async signUp(email, password, meta = {}) {
@@ -140,12 +146,14 @@ export function createGlonniSupabaseBridge() {
     },
 
     async get(table, select = '*', filters = {}) {
+      _lastError = null;
       let query = supabase.from(table).select(select);
       query = applyFilters(query, filters);
 
       const { data, error } = await query;
       if (error) {
         console.error('GET error:', table, error);
+        _lastError = error.message || String(error);
         return [];
       }
 
@@ -153,9 +161,11 @@ export function createGlonniSupabaseBridge() {
     },
 
     async ins(table, payload) {
+      _lastError = null;
       const { data, error } = await supabase.from(table).insert(payload).select();
       if (error) {
         console.error('INS error:', table, error);
+        _lastError = error.message || String(error);
         return [];
       }
 
@@ -163,9 +173,11 @@ export function createGlonniSupabaseBridge() {
     },
 
     async ups(table, payload) {
+      _lastError = null;
       const { data, error } = await supabase.from(table).upsert(payload).select();
       if (error) {
         console.error('UPS error:', table, error);
+        _lastError = error.message || String(error);
         return null;
       }
 
@@ -173,12 +185,14 @@ export function createGlonniSupabaseBridge() {
     },
 
     async upd(table, payload, filters = {}) {
+      _lastError = null;
       let query = supabase.from(table).update(payload);
       query = applyFilters(query, filters);
 
       const { error } = await query;
       if (error) {
         console.error('UPD error:', table, error);
+        _lastError = error.message || String(error);
         return false;
       }
 
@@ -186,12 +200,14 @@ export function createGlonniSupabaseBridge() {
     },
 
     async del(table, filters = {}) {
+      _lastError = null;
       let query = supabase.from(table).delete();
       query = applyFilters(query, filters);
 
       const { error } = await query;
       if (error) {
         console.error('DEL error:', table, error);
+        _lastError = error.message || String(error);
         return false;
       }
 
@@ -199,9 +215,11 @@ export function createGlonniSupabaseBridge() {
     },
 
     async rpc(functionName, params = {}) {
+      _lastError = null;
       const { data, error } = await supabase.rpc(functionName, params);
       if (error) {
         console.error('RPC error:', functionName, error);
+        _lastError = error.message || String(error);
         return null;
       }
 

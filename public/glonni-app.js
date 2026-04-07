@@ -6456,13 +6456,23 @@ const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
 if(!cat)return toast('Category not found','❌');
 const existing=await sb.get("categories","id",{name:`eq.${valid.name}`,parent_id:valid.parentId?`eq.${valid.parentId}`:'is.null',id:`neq.${catId}`}).catch(()=>[]);
 if(existing.length>0){toast('Category exists','⚠️');return;}
-const r=await sb.upd("categories",{name:valid.name,parent_id:valid.parentId,gst_slab:valid.gst,platform_commission:valid.commission,user_cashback_percent:valid.cashback,affiliate_percent:valid.affiliate,updated_by:PROFILE.id,updated_at:new Date().toISOString()},{id:`eq.${catId}`}).catch(()=>false);
+const updPayload={name:valid.name,parent_id:valid.parentId,gst_slab:valid.gst,platform_commission:valid.commission,user_cashback_percent:valid.cashback,affiliate_percent:valid.affiliate,updated_at:new Date().toISOString()};
+if(PROFILE?.id)updPayload.updated_by=PROFILE.id;
+let r=await sb.upd("categories",updPayload,{id:`eq.${catId}`}).catch(()=>false);
+if(!r&&Object.prototype.hasOwnProperty.call(updPayload,'updated_by')){
+  const retryPayload={...updPayload};
+  delete retryPayload.updated_by;
+  r=await sb.upd("categories",retryPayload,{id:`eq.${catId}`}).catch(()=>false);
+}
 if(r){
   await catMgrSaveSlabs(catId,slabRes.slabs);
   toast(`"${valid.name}" updated!`,'✅');
   catMgrCloseForm();
   apRefreshCatPage();
-}else{toast('Error while updating category (possibly blocked by permissions)', '❌');}
+}else{
+  const errMsg=(sb&&typeof sb.lastError==='function'&&sb.lastError())||'possibly blocked by permissions';
+  toast(`Error while updating category: ${errMsg}`,'❌');
+}
 }
 async function catMgrDeleteCategory(catId){
 const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
