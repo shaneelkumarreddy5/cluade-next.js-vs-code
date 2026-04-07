@@ -6036,7 +6036,16 @@ function catMgrCashbackValue(cat){
 function catMgrGstValue(cat){
   if(!cat)return '';
   const key=catMgrPickColumn(cat,['gst_slab','gst_rate','gst_percent','gst'])||catMgrPickColumnLike(cat,['gst']);
-  return key?String(cat[key]??''):'';
+  return key?catMgrNormalizeGst(cat[key]):'';
+}
+
+function catMgrNormalizeGst(v){
+  const raw=String(v??'').trim();
+  if(!raw)return '';
+  const n=parseFloat(raw.replace('%',''));
+  if(!Number.isFinite(n))return raw;
+  const clean=Number.isInteger(n)?String(n):String(n);
+  return `${clean}%`;
 }
 
 function catMgrBuildCategoryPayload(valid,row=null,{isUpdate=false}={}){
@@ -6074,43 +6083,29 @@ async function catMgrLoadCategoryRuleValues(catId){
     scope_category_id:`eq.${catId}`,
     is_active:'eq.true',
     order:'priority.desc',
-  }).catch((err)=>{
-    console.warn('catMgrLoadCategoryRuleValues - platform_rules query error:',err?.message||err);
-    return [];
-  });
-  console.log('catMgrLoadCategoryRuleValues - fetched',rows.length,'rule rows for catId',catId);
+  }).catch(()=>[]);
   const pick=(types)=>{
-    const hit=rows.find(r=>types.includes(String(r.rule_type||'').toLowerCase()));
-    const val=hit?catMgrNum(hit.rate,0):null;
-    console.log('  pick',types,'->',val,'(from rule_type:',hit?.rule_type+')')  ;
-    return val;
+    const hit=rows.find(r=>{
+      const ruleType=String(r.rule_type||'').toLowerCase();
+      return types.some(t=>ruleType===t||ruleType.includes(t));
+    });
+    return hit?catMgrNum(hit.rate,0):null;
   };
-  const result={
+  return {
     commission:pick(['commission','platform_commission']),
     cashback:pick(['cashback','user_cashback']),
     affiliate:pick(['affiliate_commission','affiliate']),
-    gst:pick(['gst','gst_rate']),
+    gst:pick(['gst_rate','gst_slab','gst','tax_gst']),
   };
-  console.log('catMgrLoadCategoryRuleValues returning:',result);
-  return result;
 }
 
 async function catMgrUpsertCategoryRule(catId,ruleType,rate){
   const rateNum=catMgrNum(rate,NaN);
-  console.log('catMgrUpsertCategoryRule:',{catId,ruleType,rate,rateNum:Number.isFinite(rateNum)?rateNum:'INVALID'});
-  if(!Number.isFinite(rateNum)){
-    console.log('  -> Skipping (non-finite rate)');
-    return true;
-  }
+  if(!Number.isFinite(rateNum))return true;
   const existing=await sb.get('platform_rules','id',{scope_category_id:`eq.${catId}`,rule_type:`eq.${ruleType}`,limit:1}).catch(()=>[]);
-  console.log('  -> Found',existing.length,'existing row(s)');
   if(existing.length){
-    console.log('  -> Updating existing rule ID:',existing[0].id);
-    const r=await sb.upd('platform_rules',{rate:rateNum,is_active:true,updated_at:new Date().toISOString()},{id:`eq.${existing[0].id}`}).catch((e)=>{console.error('  -> Update error:',e?.message||e);return false;});
-    console.log('  -> Update result:',r);
-    return r;
+    return sb.upd('platform_rules',{rate:rateNum,is_active:true,updated_at:new Date().toISOString()},{id:`eq.${existing[0].id}`}).catch(()=>false);
   }
-  console.log('  -> Creating new rule');
   return sb.ins('platform_rules',{
     rule_name:`Category ${ruleType} ${catId}`,
     rule_code:`CAT_${ruleType.toUpperCase()}_${Date.now()}`,
@@ -6124,18 +6119,36 @@ async function catMgrUpsertCategoryRule(catId,ruleType,rate){
     effective_from:new Date().toISOString(),
     created_by:PROFILE?.id||null,
     approval_status:'approved',
-  }).then(r=>{const result=Array.isArray(r)&&r.length;console.log('  -> Insert result:',result);return result;}).catch((e)=>{console.error('  -> Insert error:',e?.message||e);return false;});
+  }).then(r=>Array.isArray(r)&&r.length).catch(()=>false);
+}
+
+async function catMgrUpsertCategoryGstRule(catId,gstValue){
+  const gstRate=String(gstValue||'').replace('%','').trim();
+  const rows=await sb.get('platform_rules','id,rule_type',{
+    scope_category_id:`eq.${catId}`,
+    is_active:'eq.true',
+    order:'priority.desc',
+  }).catch(()=>[]);
+  const existingType=(rows.find(r=>String(r.rule_type||'').toLowerCase().includes('gst'))||{}).rule_type;
+  const candidates=[existingType,'gst_rate','gst_slab','gst'];
+  const tried=new Set();
+  for(const type of candidates){
+    const ruleType=String(type||'').trim();
+    if(!ruleType||tried.has(ruleType))continue;
+    tried.add(ruleType);
+    const ok=await catMgrUpsertCategoryRule(catId,ruleType,gstRate);
+    if(ok)return true;
+  }
+  return false;
 }
 
 async function catMgrSaveCategoryRuleFallbacks(catId,valid){
-  console.log('catMgrSaveCategoryRuleFallbacks saving:',{catId,gst:valid.gst,commission:valid.commission,cashback:valid.cashback,affiliate:valid.affiliate});
-  const results=await Promise.all([
-    catMgrUpsertCategoryRule(catId,'gst',String(valid.gst||'').replace('%','')),
+  await Promise.all([
+    catMgrUpsertCategoryGstRule(catId,valid.gst),
     catMgrUpsertCategoryRule(catId,'commission',valid.commission),
     catMgrUpsertCategoryRule(catId,'cashback',valid.cashback),
     catMgrUpsertCategoryRule(catId,'affiliate_commission',valid.affiliate),
   ]);
-  console.log('catMgrSaveCategoryRuleFallbacks results:',results);
 }
 
 async function catMgrSafeUpdCategory(catId,payload){
@@ -6533,7 +6546,7 @@ const slabs=await sb.get('commission_rules','id,price_min,price_max,commission_p
 const ruleVals=await catMgrLoadCategoryRuleValues(catId);
 const slabMinCommission=slabs.length?Math.min(...slabs.map(s=>catMgrNum(s.commission_percent,0))):0;
 const gstCat=catMgrGstValue(cat);
-const gstDisplay=gstCat||(ruleVals.gst!=null?`${ruleVals.gst}%`:'Not set');
+const gstDisplay=gstCat||catMgrNormalizeGst(ruleVals.gst)||(ruleVals.gst!=null?`${ruleVals.gst}%`:'Not set');
 const catCommission=catMgrCommissionValue(cat);
 const catCashback=catMgrCashbackValue(cat);
 const catAffiliate=catMgrAffiliateValue(cat);
@@ -6557,10 +6570,8 @@ catMgrSeedSlabs();
 document.getElementById('cat-name').focus();
 }
 async function catMgrShowEditForm(catId){
-console.log('=== EDIT FORM OPENING for category',catId);
 const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
-if(!cat){console.error('Category not found');return;}
-console.log('Loaded category:',{id:cat.id,name:cat.name});
+if(!cat)return;
 const modal=document.getElementById('cat-modal');
 const formEl=document.getElementById('cat-form');
 const titleEl=document.getElementById('cat-modal-title');
@@ -6568,23 +6579,19 @@ const allCats=await sb.get("categories","id,name,level",{is_active:"eq.true",ord
 const validParents=allCats.filter(c=>c.level<cat.level&&c.id!==catId);
 const existingSlabs=await sb.get('commission_rules','id,price_min,price_max,commission_percent',{category_id:`eq.${catId}`,product_id:'is.null',order:'price_min.asc,priority.desc'}).catch(()=>[]);
 const ruleVals=await catMgrLoadCategoryRuleValues(catId);
-console.log('Loaded rule values:',ruleVals);
 const catGst=catMgrGstValue(cat);
 const catCommission=catMgrCommissionValue(cat);
 const catCashback=catMgrCashbackValue(cat);
 const catAffiliate=catMgrAffiliateValue(cat);
-console.log('Category row values:',{gst:catGst,commission:catCommission,cashback:catCashback,affiliate:catAffiliate});
-const editGst=(catGst||(ruleVals.gst!=null?`${ruleVals.gst}%`:''))||'0%';
+const editGst=catMgrNormalizeGst(catGst||ruleVals.gst)||'0%';
 const editCommission=((catCommission>0)?catCommission:(ruleVals.commission!=null?ruleVals.commission:0));
 const editCashback=((catCashback>0)?catCashback:(ruleVals.cashback!=null?ruleVals.cashback:0));
 const editAffiliate=((catAffiliate>0)?catAffiliate:(ruleVals.affiliate!=null?ruleVals.affiliate:0));
-console.log('FINAL EDIT VALUES for form:',{editGst,editCommission,editCashback,editAffiliate});
 titleEl.textContent=`Edit: ${esc(cat.name)}`;
 formEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:16px"><div class="form-group"><label class="form-label">Category Name *</label><input class="form-input" id="cat-name" value="${esc(cat.name)}" maxlength="100"></div><div class="form-group"><label class="form-label">Parent Category</label><select class="form-select" id="cat-parent"><option value="">— Main Category —</option>${validParents.map(p=>`<option value="${p.id}" ${cat.parent_id===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">GST Slab *</label><select class="form-select" id="cat-gst">${CATEGORY_CONSTS.GST_SLABS.map(slab=>`<option value="${slab}" ${editGst===slab?'selected':''}>${slab}</option>`).join('')}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Platform Commission (%)</label><input class="form-input" id="cat-commission" type="number" min="0" max="100" step="0.5" value="${editCommission}"></div><div class="form-group"><label class="form-label">User Cashback (%)</label><input class="form-input" id="cat-cashback" type="number" min="0" max="100" step="0.5" value="${editCashback}"></div></div><div class="form-group"><label class="form-label">Affiliate Commission (%)</label><input class="form-input" id="cat-affiliate" type="number" min="0" max="100" step="0.5" value="${editAffiliate}"></div><div class="ap-card" style="margin:0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><p style="font-weight:700;font-size:13px">Price Based Commission Slabs</p><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm btn-pill" onclick="catMgrCopyParentSlabs()">⎘ Copy Parent</button><button class="btn btn-outline btn-sm btn-pill" onclick="catMgrAddSlab()">+ Add Slab</button></div></div><div id="cat-slab-rows"></div><p style="font-size:11px;color:var(--gray-400);margin-top:6px">Drag rows to reorder slabs. Example: 0-1000 = 8%, 1000-2000 = 10%. Last slab can have empty max.</p></div><div style="background:var(--gray-50);padding:12px;border-radius:8px;border-left:3px solid var(--orange);font-size:12px;color:var(--gray-600)">💡 Cashback + Affiliate must not exceed slab commission</div><div style="display:flex;gap:8px"><button class="btn btn-gold btn-pill" onclick="catMgrUpdateCategory('${catId}')">Save Changes</button><button class="btn btn-outline btn-pill" onclick="catMgrCloseForm()">Cancel</button></div></div>`;
 modal.classList.remove('hide');
 catMgrSeedSlabs(existingSlabs);
 document.getElementById('cat-name').focus();
-console.log('=== EDIT FORM RENDERED ===');
 }
 function catMgrCloseForm(){document.getElementById('cat-modal').classList.add('hide');}
 async function catMgrValidate(name,parentId,gst,commission,cashback,affiliate){
