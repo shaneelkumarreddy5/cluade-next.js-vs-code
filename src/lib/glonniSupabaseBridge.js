@@ -175,15 +175,14 @@ export function createGlonniSupabaseBridge() {
     async upd(table, payload, filters = {}) {
       let query = supabase.from(table).update(payload);
       query = applyFilters(query, filters);
-      query = query.select();
 
-      const { data, error } = await query;
+      const { error } = await query;
       if (error) {
         console.error('UPD error:', table, error);
-        return [];
+        return false;
       }
 
-      return data;
+      return true;
     },
 
     async del(table, filters = {}) {

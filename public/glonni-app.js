@@ -6456,8 +6456,8 @@ const cat=(await sb.get("categories","*",{id:`eq.${catId}`}).catch(()=>[]))[0];
 if(!cat)return toast('Category not found','❌');
 const existing=await sb.get("categories","id",{name:`eq.${valid.name}`,parent_id:valid.parentId?`eq.${valid.parentId}`:'is.null',id:`neq.${catId}`}).catch(()=>[]);
 if(existing.length>0){toast('Category exists','⚠️');return;}
-const r=await sb.upd("categories",{name:valid.name,parent_id:valid.parentId,gst_slab:valid.gst,platform_commission:valid.commission,user_cashback_percent:valid.cashback,affiliate_percent:valid.affiliate,updated_by:PROFILE.id,updated_at:new Date().toISOString()},{id:`eq.${catId}`}).catch(()=>null);
-if(Array.isArray(r)&&r.length){
+const r=await sb.upd("categories",{name:valid.name,parent_id:valid.parentId,gst_slab:valid.gst,platform_commission:valid.commission,user_cashback_percent:valid.cashback,affiliate_percent:valid.affiliate,updated_by:PROFILE.id,updated_at:new Date().toISOString()},{id:`eq.${catId}`}).catch(()=>false);
+if(r){
   await catMgrSaveSlabs(catId,slabRes.slabs);
   toast(`"${valid.name}" updated!`,'✅');
   catMgrCloseForm();
