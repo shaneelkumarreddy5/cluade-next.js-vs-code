@@ -5987,6 +5987,7 @@ let _catAllCats=[];
 let _catFormSlabs=[];
 let _catSlabCountMap={};
 let _catDragIdx=-1;
+let _catGstRateById=null;
 
 function catMgrNum(v, fallback=0){
   const n=parseFloat(v);
@@ -6048,6 +6049,31 @@ function catMgrNormalizeGst(v){
   return `${clean}%`;
 }
 
+async function catMgrResolveGstFromSlabId(cat){
+  if(!cat)return '';
+  const idKey=catMgrPickColumn(cat,['gst_slab_id','gst_id'])||catMgrPickColumnLike(cat,['gst','id']);
+  if(!idKey)return '';
+  const slabId=cat[idKey];
+  if(slabId==null||slabId==='')return '';
+  if(!_catGstRateById){
+    const slabs=await sb.get('gst_slabs','id,rate',{order:'rate.asc'}).catch(()=>[]);
+    _catGstRateById={};
+    for(const s of slabs){
+      _catGstRateById[String(s.id)]=catMgrNormalizeGst(s.rate);
+    }
+  }
+  return _catGstRateById[String(slabId)]||'';
+}
+
+async function catMgrResolveGstValue(cat, ruleVals=null){
+  const direct=catMgrGstValue(cat);
+  if(direct)return direct;
+  const fromId=await catMgrResolveGstFromSlabId(cat);
+  if(fromId)return fromId;
+  if(ruleVals&&ruleVals.gst!=null)return catMgrNormalizeGst(ruleVals.gst);
+  return '';
+}
+
 function catMgrBuildCategoryPayload(valid,row=null,{isUpdate=false}={}){
   const sample=row||catMgrSchemaSample()||{};
   const payload={
@@ -6059,8 +6085,12 @@ function catMgrBuildCategoryPayload(valid,row=null,{isUpdate=false}={}){
   const platformCol=catMgrPickColumn(sample,['platform_commission','platform_fee_percent','platform_fee_pct'])||catMgrPickColumnLike(sample,['platform','commission'])||'platform_commission';
   const cashbackCol=catMgrPickColumn(sample,['user_cashback_percent','cashback_percent','user_cashback','cashback'])||catMgrPickColumnLike(sample,['cashback'])||'user_cashback_percent';
   const affiliateCol=catMgrPickColumn(sample,['affiliate_percent','affiliate_commission','affiliate_commission_pct','affiliate','affliate_percent','affilate_percent'])||catMgrPickColumnLike(sample,['affiliate']);
+  const gstNum=catMgrNum(String(valid.gst||'').replace('%',''),NaN);
 
-  if(gstCol)payload[gstCol]=valid.gst;
+  if(gstCol){
+    const k=String(gstCol).toLowerCase();
+    payload[gstCol]=(k.includes('rate')||k.includes('percent')||k.includes('pct'))&&Number.isFinite(gstNum)?gstNum:catMgrNormalizeGst(valid.gst);
+  }
   payload[platformCol]=valid.commission;
   payload[cashbackCol]=valid.cashback;
   if(affiliateCol)payload[affiliateCol]=valid.affiliate;
@@ -6545,8 +6575,8 @@ const children=await sb.get("categories","id,name",{parent_id:`eq.${catId}`}).ca
 const slabs=await sb.get('commission_rules','id,price_min,price_max,commission_percent,is_active',{category_id:`eq.${catId}`,product_id:'is.null',is_active:'eq.true',order:'price_min.asc,priority.desc'}).catch(()=>[]);
 const ruleVals=await catMgrLoadCategoryRuleValues(catId);
 const slabMinCommission=slabs.length?Math.min(...slabs.map(s=>catMgrNum(s.commission_percent,0))):0;
-const gstCat=catMgrGstValue(cat);
-const gstDisplay=gstCat||catMgrNormalizeGst(ruleVals.gst)||(ruleVals.gst!=null?`${ruleVals.gst}%`:'Not set');
+const gstResolved=await catMgrResolveGstValue(cat,ruleVals);
+const gstDisplay=gstResolved||'Not set';
 const catCommission=catMgrCommissionValue(cat);
 const catCashback=catMgrCashbackValue(cat);
 const catAffiliate=catMgrAffiliateValue(cat);
@@ -6579,7 +6609,7 @@ const allCats=await sb.get("categories","id,name,level",{is_active:"eq.true",ord
 const validParents=allCats.filter(c=>c.level<cat.level&&c.id!==catId);
 const existingSlabs=await sb.get('commission_rules','id,price_min,price_max,commission_percent',{category_id:`eq.${catId}`,product_id:'is.null',order:'price_min.asc,priority.desc'}).catch(()=>[]);
 const ruleVals=await catMgrLoadCategoryRuleValues(catId);
-const catGst=catMgrGstValue(cat);
+const catGst=await catMgrResolveGstValue(cat,ruleVals);
 const catCommission=catMgrCommissionValue(cat);
 const catCashback=catMgrCashbackValue(cat);
 const catAffiliate=catMgrAffiliateValue(cat);
